@@ -101,6 +101,30 @@ client/src/
 - ~214KB JS (gzip: ~72KB)
 - ~232KB CSS (gzip: ~31KB)
 
+## [v1.4.0] - 2026-05-20 - Fase 4: Scripts de Treinamento Python
+
+### Added
+- `training/config.py` - configuração centralizada
+- `training/download_dataset.py` - download Kaggle + fallback HuggingFace
+- `training/dataset.py` - pré-processamento + dados sintéticos
+- `training/model.py` - carregamento BERTimbau
+- `training/trainer.py` - K-Fold training com métricas
+- `training/evaluate_model.py` - avaliação completa
+- `training/dashboard.py` - dashboard Gradio (globais, por fold, por classe, matriz confusão)
+- `training/hybrid_classifier.py` - fluxo HF Spaces → local → Cohere
+- `training/upload_huggingface.py` - upload para HF Hub
+
+### Fluxo Híbrido
+1. HuggingFace Spaces
+2. Modelo local fine-tuned
+3. Cohere API (Zero-Shot fallback)
+
+### Dashboard Gradio (4 abas)
+- Resumo Geral: accuracy, f1, precision, recall
+- Por Fold: métricas individuais
+- Por Classe: métricas por categoria
+- Matriz de Confusão: normalizada
+
 ---
 
 ## Roadmap
@@ -109,6 +133,6 @@ client/src/
 - [x] v1.1.0 - Backend API
 - [x] v1.1.0 - Banco SQLite (sql.js)
 - [x] v1.3.0 - Frontend React + Bootstrap
-- [ ] v1.4.0 - Scripts de Treinamento Python
+- [x] v1.4.0 - Scripts de Treinamento Python
 - [ ] v1.5.0 - Deploy no Render
 - [ ] v1.6.0 - Testes E2E
