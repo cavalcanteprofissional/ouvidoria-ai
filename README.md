@@ -34,13 +34,16 @@ Tudo isso com IA, sem necessidade de triagem manual!
 ```mermaid
 graph LR
     subgraph ML
-        HF[HuggingFace]
+        HF[HF Spaces]
         CB[Cohere]
+        Local[Local Mock]
     end
 
     subgraph Backend
         API[Express API]
         Auth[Auth Middleware]
+        NER[NER Service]
+        DB[(SQLite)]
     end
 
     subgraph Cliente
@@ -51,15 +54,27 @@ graph LR
     API -->|Verify| Auth
     Auth -->|Validate| API
     API -->|Classify| HF
-    API -->|Classify| CB
+    API -->|Fallback| Local
+    API -->|Fallback| CB
+    API -->|Extract| NER
+    API -->|Persist| DB
 ```
 
-### 2. Fluxo de Classificação (Zero-Shot com Cohere)
+### 2. Fluxo de Classificação (Sistema Híbrido)
 
 ```mermaid
-flowchart LR
-    Input[Texto do cidadão] --> Cohere[Cohere API]
-    Cohere -->|Zero-Shot| Output[Categoria + Confiança]
+flowchart TD
+    Input[Texto do cidadão] --> HF_Spaces{HF Spaces disponível?}
+    HF_Spaces -->|Sim| HF[HF Spaces API]
+    HF_Spaces -->|Não| Local{Confiança > 0.65?}
+    Local -->|Sim| LocalMock[Classificação Local]
+    Local -->|Não| Cohere[Cohere API]
+    HF --> Output1[Categoria + Confiança]
+    LocalMock --> Output2[Categoria + Confiança]
+    Cohere --> Output3[Categoria + Confiança]
+    Output1 --> Output[Resultado]
+    Output2 --> Output
+    Output3 --> Output
 ```
 
 ### 3. Fluxo de Extração de Entidades (NER)
@@ -79,15 +94,19 @@ flowchart LR
     Output --> Evaluation[Avaliação K-Fold]
 ```
 
-### 5. Fluxo do Sistema Híbrido (Fallback)
+### 5. Fluxo de Classificação Completo
 
 ```mermaid
-flowchart TD
-    Inicio[Requisição] --> Verifica{Modelo local existe?}
-    Verifica -->|Sim| ModeloLocal[Usa BERTimbau]
-    Verifica -->|Não| CohereAPI[Usa Cohere]
-    ModeloLocal --> Retorno[Retorna resultado]
-    CohereAPI --> Retorno
+flowchart LR
+    texto[Texto] --> NER[NER Service]
+    NER --> Routing[Routing Service]
+    texto --> Classify[Classification Service]
+    Classify --> HF[HF Spaces]
+    HF --> Mock[Local Mock]
+    Mock --> Cohere[Cohere API]
+    Classify --> Result[Resultado]
+    NER --> Result
+    Routing --> Result
 ```
 
 ### 6. Fluxo de Requisição Completo
@@ -116,8 +135,9 @@ sequenceDiagram
 
 ### Backend
 - Node.js + Express
-- Cohere API (Zero-Shot Classification + Chat)
-- BERTimbau (Fine-tuned para classificação)
+- SQLite (sql.js) - Persistência local
+- Cohere API (Classification com exemplos)
+- HuggingFace Spaces (modelo deployado)
 
 ### Frontend
 - React 18 + Vite
@@ -125,8 +145,9 @@ sequenceDiagram
 
 ### Machine Learning
 - Transformers (HuggingFace)
-- BERTimbau (Modelo português)
+- BERTimbau (Fine-tuning para treinamento)
 - K-Fold Cross-Validation
+- HuggingFace Spaces (deploy do modelo)
 
 ## 📚 Dataset Utilizado
 
@@ -148,7 +169,7 @@ sequenceDiagram
 | Documentation, Feedback | Iluminação |
 | Resolution, Feature, Sales, Product | Outros |
 
-## 🤖 Modelos HuggingFace
+## 🤖 Modelos e Serviços de IA
 
 ### Treinamento (Fine-tuning)
 
@@ -159,13 +180,19 @@ sequenceDiagram
 **Detalhes:**
 - Vocabulário: 29.794 tokens
 - Arquitetura: 12 layers, 768 hidden, 12 attention heads
+- Local: `models/checkpoints/fold_0/`
 
-### Inferência
+### Inferência (Pipeline de Classificação)
 
-| Modelo | Provider | Uso |
-|--------|-----------|-----|
-| Cohere command-r | Cohere API | Classificação Zero-Shot + NER |
-| neuralmind/bert-base-portuguese-cased | Local (fine-tuned) | Classificação com modelo treinado |
+O sistema usa uma abordagem híbrida com fallback em cascata:
+
+| Ordem | Serviço | Tipo | Descrição |
+|-------|---------|------|-----------|
+| 1º | HuggingFace Spaces | API Externa | Modelo deployado (prioritário) |
+| 2º | Classificação Local | Mock | Baseado em palavras-chave |
+| 3º | Cohere API | API Externa | Classification com exemplos |
+
+**Nota:** O modelo fine-tuned local (BERTimbau) está disponível em `models/checkpoints/fold_0/` mas a inferência em produção usa HF Spaces ou fallback.
 
 ## 📋 Pré-requisitos
 
@@ -286,7 +313,7 @@ ouvidoria-triagem/
 │   │   ├── triagem.js          # Endpoint de triagem
 │   │   └── metricas.js         # Endpoint de métricas
 │   └── services/
-│       ├── classify.js         # Zero-Shot (Cohere)
+│       ├── classify.js         # Classificação híbrida (HF Spaces > Mock > Cohere)
 │       ├── ner.js              # Extração de entidades
 │       └── routing.js          # Encaminhamento por secretaria
 │
@@ -321,7 +348,8 @@ ouvidoria-triagem/
 │   └── per_class_metrics.json # Métricas por classe
 │
 ├── data/                       # Dados
-│   └── raw/                   # Dataset original
+│   ├── raw/                   # Dataset original
+│   └── ouvidoria.db          # Banco SQLite (criado automaticamente)
 │
 └── README.md
 ```
@@ -374,6 +402,8 @@ O dashboard inclui:
 | API_KEY | Chave para autenticação | Obrigatório |
 | PORT | Porta do servidor | 3000 |
 | CLIENT_URL | URL do frontend (CORS) | http://localhost:5173 |
+| HF_SPACES_URL | URL do HF Spaces deployado | https://cavalcanteprofissional-ouvidoria-ai.hf.space |
+| HF_MODEL_ID | ID do modelo no HF Hub | cavalcanteprofissional/ouvidoria-ai |
 
 ## 🚀 Próximos Passos (Roadmap)
 
