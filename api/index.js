@@ -6,7 +6,15 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+
+const dataDir = path.join(__dirname, '..', 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
