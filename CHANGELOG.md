@@ -101,7 +101,40 @@ client/src/
 - ~214KB JS (gzip: ~72KB)
 - ~232KB CSS (gzip: ~31KB)
 
-## [v1.4.0] - 2026-05-20 - Fase 4: Scripts de Treinamento Python
+## [v1.2.0] - 2026-05-20 - Fase 2: NER e Dataset
+
+### Added
+- `api/services/ner.js` - NER completo com 6 campos:
+  - localizacao, organizacao, nome_servidor, equipamento, data, urgencia
+- `training/download_dataset.py` - Download Kaggle + HuggingFace fallback + dados sintéticos
+- `training/dataset.py` - Augmentação de dados e dataset sintético
+- `training/run_pipeline.py` - Pipeline unificado de treinamento
+- `training/dashboard.py` - Dashboard Gradio melhorado (5 tabs)
+
+### NER Implementation
+- Regex patterns para nomes de servidores (Dr., Sr., etc)
+- Entidades organizadas (UBS, escolas, órgãos públicos)
+- Equipamentos (semáforo, poste, bueiro, ponte)
+- Detecção de urgência baseada em palavras-chave
+
+### Dashboard Gradio (5 abas)
+- Resumo Geral (métricas globais)
+- Por Fold (detalhes de cada fold)
+- Por Classe (por categoria + secretaria)
+- Matriz de Confusão (normalizada)
+- Comandos (instruções de uso)
+
+### Pipeline Commands
+```bash
+cd training
+python download_dataset.py  # Baixar dataset
+python run_pipeline.py      # Executar pipeline completo
+python dashboard.py        # Abrir dashboard
+```
+
+---
+
+## [v1.4.0] - 2026-05-20 - Fase 4: Scripts de Treinamento Python (Completo)
 
 ### Added
 - `training/config.py` - configuração centralizada

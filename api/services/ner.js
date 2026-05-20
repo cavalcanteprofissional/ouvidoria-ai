@@ -10,6 +10,7 @@ Formato obrigatório:
 {
   "localizacao": ["lista de ruas, bairros, pontos de referência mencionados"],
   "organizacao": ["postos de saúde, escolas, órgãos públicos citados"],
+  "nome_servidor": ["nomes de servidores públicos mencionados"],
   "equipamento": ["equipamentos mencionados (semáforo, poste, bomba d'água, etc)"],
   "data": ["datas e prazos mencionados"],
   "urgencia": "alta | media | baixa"
@@ -28,18 +29,57 @@ async function extractEntities(text) {
       preamble: PREAMBLE
     });
 
-    const clean = res.text().replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
+    const rawText = typeof res.text === 'function' ? res.text() : res.text;
+    const clean = rawText.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+
+    return {
+      localizacao: parsed.localizacao || [],
+      organizacao: parsed.organizacao || [],
+      nome_servidor: parsed.nome_servidor || [],
+      equipamento: parsed.equipamento || [],
+      data: parsed.data || [],
+      urgencia: normalizeUrgencia(parsed.urgencia)
+    };
   } catch (err) {
-    console.error('[ner] Erro:', err.message);
+    console.error('[ner] Erro Cohere:', err.message);
     return mockExtractEntities(text);
   }
+}
+
+function normalizeUrgencia(urgencia) {
+  const map = { alta: 'alta', alta: 'alta', média: 'media', media: 'media', baixa: 'baixa', baixa: 'baixa' };
+  return map[urgencia?.toLowerCase()] || 'media';
+}
+
+function extractNames(text) {
+  const names = [];
+  const patterns = [
+    /\b(doutor|dra|dr| Sr\.?|Sra\.?| professor|prof\.?)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/gi,
+    /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(disse|mencionou|atendeu|servidor|funcionário)/gi,
+    /\b([A-Z][a-z]{2,})\s+([A-Z][a-z]{2,})\b/g
+  ];
+
+  const stopWords = ['Prefeitura', 'Municipal', 'Secretaria', 'Governo', 'Estado', 'Cidade', 'Bairro', 'Rua', 'Av'];
+
+  for (const pattern of patterns) {
+    const matches = text.matchAll(pattern);
+    for (const match of matches) {
+      const name = (match[2] || match[1]).trim();
+      if (name.length > 3 && !stopWords.some(sw => name.includes(sw))) {
+        names.push(name);
+      }
+    }
+  }
+
+  return [...new Set(names)];
 }
 
 function mockExtractEntities(text) {
   const result = {
     localizacao: [],
     organizacao: [],
+    nome_servidor: [],
     equipamento: [],
     data: [],
     urgencia: 'media'
@@ -47,30 +87,82 @@ function mockExtractEntities(text) {
 
   const lower = text.toLowerCase();
 
-  const ruas = lower.match(/\b(rua|avenida|av\.|travessa|alameda|praça|viela)\s+[\w\s]+/gi);
+  const ruaPattern = /\b(rua|avenida|av\.|travessa|alameda|praça|viela|estrada|rodovia)\s+[\w\s]+/gi;
+  const ruas = text.match(ruaPattern);
   if (ruas) {
     result.localizacao = ruas.map(r => r.replace(/^\w/, c => c.toUpperCase()));
   }
 
-  if (lower.includes('posto') || lower.includes('ubs') || lower.includes('hospital') || lower.includes('clínica')) {
-    result.organizacao.push('Unidade de Saúde');
+  const numberPattern = /\b(número|nº)\s*\d+/gi;
+  const numbers = text.match(numberPattern);
+  if (numbers) {
+    result.localizacao.push(...numbers.map(n => n.replace(/^\w/, c => c.toUpperCase())));
   }
-  if (lower.includes('escola') || lower.includes('colégio')) {
-    result.organizacao.push('Instituição de Ensino');
+
+  const orgPatterns = [
+    { pattern: /(?:posto|ubs|unidade\s+de\s+saúde|hospital|clínica|farmácia)\s+[\w\s]+/gi, label: 'Unidade de Saúde' },
+    { pattern: /(?:escola|colégio|creche|instituto)\s+[\w\s]+/gi, label: 'Instituição de Ensino' },
+    { pattern: /(?:prefeitura|secretaria|câmara)\s+[\w\s]+/gi, label: 'Órgão Público' },
+    { pattern: /(?:posto\s+de\s+gasolina|posto\s+petrobras|bandeira)\s+[\w\s]*/gi, label: 'Posto de Gasolina' }
+  ];
+
+  for (const { pattern, label } of orgPatterns) {
+    const matches = text.match(pattern);
+    if (matches) {
+      result.organizacao.push(...matches.map(m => m.trim()));
+    }
   }
 
-  if (lower.includes('semáforo')) result.equipamento.push('Semáforo');
-  if (lower.includes('poste')) result.equipamento.push('Poste de luz');
-  if (lower.includes('ônibus')) result.equipamento.push('Ônibus');
+  const names = extractNames(text);
+  result.nome_servidor = names;
 
-  const dias = lower.match(/\d+\s*dias?/g);
-  if (dias) result.data = dias;
+  const equipPatterns = [
+    { words: ['semáforo'], label: 'Semáforo' },
+    { words: ['poste', 'luz', 'lâmpada'], label: 'Postes de Iluminação' },
+    { words: ['ônibus', 'ônibus'], label: 'Linha de Ônibus' },
+    { words: ['bomba', 'água'], label: 'Bomba d\'Água' },
+    { words: ['radar'], label: 'Radar' },
+    { words: ['placa'], label: 'Placa de Trânsito' },
+    { words: ['ponte'], label: 'Ponte' },
+    { words: ['calçada', 'calcada'], label: 'Calçada' },
+    { words: ['bueiro'], label: 'Bueiro' }
+  ];
 
-  if (lower.includes('urgente') || lower.includes('emergência') || lower.includes('risco') || lower.includes('perigoso')) {
+  for (const { words, label } of equipPatterns) {
+    if (words.some(w => lower.includes(w))) {
+      result.equipamento.push(label);
+    }
+  }
+
+  const datePatterns = [
+    { pattern: /\d+\s*dias?/gi, label: 'dias' },
+    { pattern: /\d+\s*semanas?/gi, label: 'semanas' },
+    { pattern: /\d+\s*mêses?/gi, label: 'meses' },
+    { pattern: /\d{1,2}\/\d{1,2}\/\d{2,4}/g, label: 'data' },
+    { pattern: /há\s+\d+\s*(?:dia|dias?|semana|semanas?)/gi, label: 'tempo' }
+  ];
+
+  for (const { pattern } of datePatterns) {
+    const matches = text.match(pattern);
+    if (matches) {
+      result.data.push(...matches);
+    }
+  }
+
+  const urgencyHigh = ['urgente', 'emergência', 'risco', 'perigoso', 'grave', 'crítico', 'acidente', 'morte', 'ferido', 'socorro'];
+  const urgencyLow = ['semana', 'mês', 'há muito', 'faz tempo', 'antigo', 'velho'];
+
+  if (urgencyHigh.some(w => lower.includes(w))) {
     result.urgencia = 'alta';
-  } else if (lower.includes('semana') || lower.includes('mês')) {
+  } else if (urgencyLow.some(w => lower.includes(w))) {
     result.urgencia = 'baixa';
   }
+
+  result.localizacao = [...new Set(result.localizacao)];
+  result.organizacao = [...new Set(result.organizacao)];
+  result.nome_servidor = [...new Set(result.nome_servidor)];
+  result.equipamento = [...new Set(result.equipamento)];
+  result.data = [...new Set(result.data)];
 
   return result;
 }

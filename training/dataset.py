@@ -1,122 +1,183 @@
-import json
+from .config import MODEL_CONFIG, TRAINING_CONFIG, CATEGORIES, HF_MODEL_ID
 import random
+import json
 from pathlib import Path
-from .config import CATEGORIES, CATEGORY_MAPPING
 
-def prepare_dataset(raw_data=None):
-    if raw_data is None:
-        from .download_dataset import load_dataset
-        raw_data = load_dataset()
+def augment_data(data, target_size=None):
+    if not data:
+        return data
 
-    if not raw_data:
-        print("[dataset] Usando dados sintéticos para teste...")
-        return generate_synthetic_data()
+    if target_size is None:
+        target_size = len(data) * 10
 
-    processed = []
-    for item in raw_data:
-        text = item.get('texto', item.get('text', item.get('description', '')))
-        categoria = item.get('categoria', item.get('category', item.get('label', 'Outros')))
+    augmented = []
+    templates = {
+        'Infraestrutura': [
+            "Problema de infraestrutura: {text}",
+            "Solicito reparo: {text}",
+            "Denúncia sobre infraestrutura: {text}",
+            "Há um problema de infraestrutura em: {text}",
+        ],
+        'Saúde': [
+            "Problema na área de saúde: {text}",
+            "Solicito atenção da saúde: {text}",
+            "Denúncia de saúde: {text}",
+            "Na área da saúde: {text}",
+        ],
+        'Trânsito': [
+            "Problema de trânsito: {text}",
+            "Solicito intervenção no trânsito: {text}",
+            "Denúncia de trânsito: {text}",
+            "No trânsito: {text}",
+        ],
+        'Iluminação': [
+            "Problema de iluminação: {text}",
+            "Solicito reparo na iluminação: {text}",
+            "Denúncia de iluminação: {text}",
+            "Sobre iluminação: {text}",
+        ],
+        'Outros': [
+            "Manifestação: {text}",
+            "Solicito informações: {text}",
+            "Denúncia: {text}",
+            "Reclamação: {text}",
+        ]
+    }
 
-        if categoria not in CATEGORIES:
-            mapped = CATEGORY_MAPPING.get(categoria, 'Outros')
-            if mapped not in CATEGORIES:
-                mapped = 'Outros'
-        else:
-            mapped = categoria
+    for item in data:
+        augmented.append(item)
 
-        if text and len(text) > 10:
-            processed.append({
-                'text': text,
-                'label': CATEGORIES.index(mapped)
+        text = item['text']
+        label = item.get('categoria', CATEGORIES[item['label']])
+
+        for _ in range(3):
+            template = random.choice(templates.get(label, templates['Outros']))
+            new_text = template.format(text=text.lower())
+            augmented.append({
+                'text': new_text,
+                'label': item['label'],
+                'categoria': label
             })
 
-    return processed
+        words = text.lower().split()
+        if len(words) > 5:
+            shortened = ' '.join(random.sample(words, min(len(words)-2, len(words))))
+            augmented.append({
+                'text': shortened + "...",
+                'label': item['label'],
+                'categoria': label
+            })
+
+        words_upper = ' '.join([w.upper() if random.random() > 0.5 else w for w in text.split()])
+        augmented.append({
+            'text': words_upper,
+            'label': item['label'],
+            'categoria': label
+        })
+
+    random.shuffle(augmented)
+
+    if target_size and len(augmented) < target_size:
+        repeat_factor = (target_size // len(augmented)) + 1
+        augmented = augmented * repeat_factor
+        random.shuffle(augmented)
+
+    return augmented[:target_size] if target_size else augmented
+
+def prepare_dataset():
+    data_dir = Path(__file__).parent.parent / "data" / "raw"
+    processed_file = data_dir / "processed_ouvidoria.json"
+
+    if processed_file.exists():
+        with open(processed_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            print(f"[dataset] Dataset carregado: {len(data)} amostras")
+            return data
+
+    from .download_dataset import download_dataset
+    result = download_dataset()
+
+    if result and Path(result).exists():
+        with open(result, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    return generate_synthetic_data()
 
 def generate_synthetic_data():
+    print("[dataset] Gerando dados sintéticos...")
+
     examples = [
-        ("Tem um buraco gigante na avenida principal perto do posto de saúde municipal", 0),
-        ("Calçada quebrada na frente da escola José de Alencar, risco para crianças", 0),
-        ("Falta de água no bairro Vila Nova há 3 dias, situação crítica", 0),
-        ("Rua com buracos enormes na região central, varios carros prejudicados", 0),
-        ("Ponte com rachaduras na estrada vicinal, muito perigoso", 0),
-        ("Falta dipirona e paracetamol no posto de saúde do bairro centro", 1),
-        ("Médico não apareceu na UBS Santa Maria hoje de manhã, consulta cancelada", 1),
-        ("Farmácia do posto está sem medicamentos há semanas, sem atendimento", 1),
-        ("Enfermeira não atende no posto do bairro progressista, descaso", 1),
-        ("Hospital municipal sem insumos básicos para atendimento de emergência", 1),
-        ("Semáforo quebrado na esquina da rua 7 com a rua 15, perigoso", 2),
-        ("Ônibus 302 não passa há dois dias no meu bairro, sem informação", 2),
-        ("Ponto de ônibus quebrado na Av. Brasil, sem banco para esperar", 2),
-        (" много транспорта на дороге, muito congestionamento", 2),
-        ("Placa de trânsito arrancada na estrada do bairro industrial", 2),
-        ("Poste apagado há três noites na rua das flores, escuridão total", 3),
-        ("Toda a praça central está sem luz, inseguro à noite", 3),
-        ("Lâmpada do poste em frente ao número 45 está queimada há dias", 3),
-        ("Iluminação pública quebrada na entrada do parque municipal", 3),
-        (" множество фонарей не работает, vários postes sem funcionar", 3),
-        ("Quero elogiar o atendimento do servidor João da ouvidoria", 4),
-        ("Preciso de informação sobre como tirar alvará de funcionamento", 4),
-        ("Denúncia sobre irregularidades na administração pública municipal", 4),
-        ("Solicito documentação sobre obras na rua principal do bairro", 4),
-        ("Рецепция была отличная, elogio ao atendimento da recepção", 4),
+        ("Buraco enorme na Av. Principal perto do posto de saúde municipal", 0, "Infraestrutura"),
+        ("Calçada quebrada na frente da escola José de Alencar", 0, "Infraestrutura"),
+        ("Falta de água no bairro Vila Nova há 3 dias", 0, "Infraestrutura"),
+        ("Rua com buracos enormes na região central", 0, "Infraestrutura"),
+        ("Ponte com rachaduras na estrada vicinal", 0, "Infraestrutura"),
+        ("Bueiro entupido na rua das flores causando alagamento", 0, "Infraestrutura"),
+        (" poste de luz quebrado na entrada do bairro", 0, "Infraestrutura"),
+
+        ("Falta dipirona no posto de saúde do bairro centro", 1, "Saúde"),
+        ("Médico Dr. João não apareceu na UBS Santa Maria", 1, "Saúde"),
+        ("Farmácia do posto sem medicamentos há semanas", 1, "Saúde"),
+        ("Enfermeira Maria não atende no posto do bairro", 1, "Saúde"),
+        ("Hospital sem insumos para emergência", 1, "Saúde"),
+        (" UBS sem médico hoje de manhã", 1, "Saúde"),
+
+        ("Semáforo quebrado na esquina da rua 7 com a 15", 2, "Trânsito"),
+        ("Ônibus 302 não passa há dois dias no meu bairro", 2, "Trânsito"),
+        ("Ponto de ônibus sem banco para esperar", 2, "Trânsito"),
+        ("Placa de trânsito arrancada na estrada", 2, "Trânsito"),
+        ("Radar quebrado na avança principal", 2, "Trânsito"),
+
+        ("Poste apagado há três noites na rua das flores", 3, "Iluminação"),
+        ("Toda a praça central está sem luz", 3, "Iluminação"),
+        ("Lâmpada do poste queimada há dias", 3, "Iluminação"),
+        ("Iluminação pública quebrada na entrada do parque", 3, "Iluminação"),
+
+        ("Elogio ao atendimento do servidor Pedro da ouvidoria", 4, "Outros"),
+        ("Informação sobre alvará de funcionamento", 4, "Outros"),
+        ("Denúncia sobre irregularidades na administração", 4, "Outros"),
+        ("Solicito documentação sobre obras", 4, "Outros"),
     ]
 
-    random.shuffle(examples)
+    data = []
+    for text, label, categoria in examples:
+        for _ in range(50):
+            data.append({
+                'text': text,
+                'label': label,
+                'categoria': categoria
+            })
 
-    processed = []
-    for text, label in examples:
-        for _ in range(40):
-            variations = generate_variations(text)
-            for var_text in variations:
-                processed.append({
-                    'text': var_text,
-                    'label': label
-                })
+    print(f"[dataset] Dados sintéticos gerados: {len(data)} amostras")
+    return data
 
-    return processed
+def load_train_test_split(test_size=0.2, random_state=42):
+    import random
+    random.seed(random_state)
 
-def generate_variations(text):
-    variations = [text]
+    data = prepare_dataset()
 
-    words_to_add = [
-        "Por favor, ",
-        "Venho por meio desta ",
-        "Gostaria de registrar ",
-        "Venho relatar ",
-        "Informo que ",
-    ]
+    if not data:
+        return [], [], []
 
-    endings = [
-        " já faz alguns dias.",
-        " situação urgente.",
-        " peço providências.",
-        " preciso de ajuda.",
-        " isso está atrapalhando.",
-    ]
-
-    base = text.lower().replace("tem", "existe").replace("falta", "ausência de")
-    variations.append(base)
-
-    for prefix in words_to_add[:2]:
-        for suffix in endings[:2]:
-            variations.append(f"{prefix}{text.lower()}{suffix}")
-
-    return variations[:5]
-
-def split_dataset(data, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     random.shuffle(data)
 
-    total = len(data)
-    train_size = int(total * train_ratio)
-    val_size = int(total * val_ratio)
+    split_idx = int(len(data) * (1 - test_size))
+    train_data = data[:split_idx]
+    test_data = data[split_idx:]
 
-    train_data = data[:train_size]
-    val_data = data[train_size:train_size + val_size]
-    test_data = data[train_size + val_size:]
-
-    return train_data, val_data, test_data
+    return train_data, test_data, data
 
 if __name__ == "__main__":
     data = prepare_dataset()
-    print(f"Dataset preparado: {len(data)} amostras")
-    print(f"Exemplo: {data[0] if data else 'Nenhum'}")
+    print(f"\n[dataset] Total: {len(data)} amostras")
+
+    if data:
+        categories = {}
+        for item in data:
+            cat = item.get('categoria', CATEGORIES[item['label']])
+            categories[cat] = categories.get(cat, 0) + 1
+
+        print("\nDistribuição:")
+        for cat, count in categories.items():
+            print(f"  {cat}: {count}")
