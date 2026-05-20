@@ -1,205 +1,128 @@
 import os
 import json
-import kaggle
 from pathlib import Path
+from config import KAGGLE_KEY, KAGGLE_USERNAME
 from dotenv import load_dotenv
 
 load_dotenv('.env.local')
 
-KAGGLE_KEY = os.getenv('KAGGLE_KEY')
-KAGGLE_USERNAME = os.getenv('KAGGLE_USERNAME', 'cavalcanteprofissional')
+def generate_synthetic_data():
+    print("[dataset] Gerando dados sintéticos para treinamento...")
 
-def download_dataset():
-    dataset_path = Path(__file__).parent.parent / "data" / "raw"
-    dataset_path.mkdir(parents=True, exist_ok=True)
+    examples = [
+        ("Buraco enorme na Av. Principal perto do posto de saúde municipal", 0, "Infraestrutura"),
+        ("Calçada quebrada na frente da escola José de Alencar", 0, "Infraestrutura"),
+        ("Falta de água no bairro Vila Nova há 3 dias", 0, "Infraestrutura"),
+        ("Rua com buracos enormes na região central", 0, "Infraestrutura"),
+        ("Ponte com rachaduras na estrada vicinal", 0, "Infraestrutura"),
+        ("Bueiro entupido na rua das flores causando alagamento", 0, "Infraestrutura"),
+        ("Poste de luz quebrado na entrada do bairro", 0, "Infraestrutura"),
+        ("Asfalto deteriorado na estrada do aeroporto", 0, "Infraestrutura"),
+        ("Guia quebrada na calçada da rua comerciantes", 0, "Infraestrutura"),
+        ("Esgoto a céu aberto na vizinhança", 0, "Infraestrutura"),
+        ("Tampa dePVU faltando no meio da rua", 0, "Infraestrutura"),
+        ("Muro de arrimo caindo na viela", 0, "Infraestrutura"),
 
-    print(f"[download] KAGGLE_KEY: {'*' * len(KAGGLE_KEY) if KAGGLE_KEY else 'NOT SET'}")
-    print(f"[download] KAGGLE_USERNAME: {KAGGLE_USERNAME}")
+        ("Falta dipirona no posto de saúde do bairro centro", 1, "Saúde"),
+        ("Médico Dr. João não apareceu na UBS Santa Maria", 1, "Saúde"),
+        ("Farmácia do posto sem medicamentos há semanas", 1, "Saúde"),
+        ("Enfermeira Maria não atende no posto do bairro", 1, "Saúde"),
+        ("Hospital sem insumos para emergência", 1, "Saúde"),
+        ("Ambulância quebrada no garage municipal", 1, "Saúde"),
+        ("Falta soro no hospital regional", 1, "Saúde"),
+        ("Médico ausentou-se do plantão noturno", 1, "Saúde"),
+        ("UBS sem atendimento médico hoje", 1, "Saúde"),
+        ("Posto de saúde com filas enormes", 1, "Saúde"),
+        ("Falta vacina no posto de saúde", 1, "Saúde"),
+        ("Remédios em falta na farmácia popular", 1, "Saúde"),
 
-    if KAGGLE_KEY:
-        os.environ['KAGGLE_KEY'] = KAGGLE_KEY
-        os.environ['KAGGLE_USERNAME'] = KAGGLE_USERNAME
+        ("Semáforo quebrado na esquina da rua 7 com a 15", 2, "Trânsito"),
+        ("Ônibus 302 não passa há dois dias no meu bairro", 2, "Trânsito"),
+        ("Ponto de ônibus sem banco para esperar", 2, "Trânsito"),
+        ("Placa de trânsito arrancada na estrada", 2, "Trânsito"),
+        ("Semáforo piscando amarelo na av. brasil", 2, "Trânsito"),
+        ("Radar com defeito na via expressa", 2, "Trânsito"),
+        ("Lombada desgastada na rua escolar", 2, "Trânsito"),
+        ("Sinalização de obra abandonada na via", 2, "Trânsito"),
+        ("Faixa de pedestre apagada na frente da escola", 2, "Trânsito"),
+        ("Ponto de ônibus destruído porvândalos", 2, "Trânsito"),
+        ("Semáforo sem funcionar no cruzamento", 2, "Trânsito"),
+        ("Veículo abandonado na via pública", 2, "Trânsito"),
 
-        try:
-            from kaggle.api.kaggle_api_extended import KaggleApi
-            api = KaggleApi()
-            api.authenticate()
+        ("Poste apagado há três noites na rua das flores", 3, "Iluminação"),
+        ("Toda a praça central está sem luz", 3, "Iluminação"),
+        ("Lâmpada do poste queimada há dias", 3, "Iluminação"),
+        ("Iluminação pública quebrada na entrada do parque", 3, "Iluminação"),
+        ("Refletor do campo de futebol queimado", 3, "Iluminação"),
+        ("Postes sem luz na entrada da escola", 3, "Iluminação"),
+        ("Iluminação da praça não funciona à noite", 3, "Iluminação"),
+        ("Lâmpada da rua piscando constantemente", 3, "Iluminação"),
+        ("Poste com luz queimada no bairro inteiro", 3, "Iluminação"),
+        ("Iluminação do mercado público desligada", 3, "Iluminação"),
+        ("Túnel sem iluminação adequado", 3, "Iluminação"),
 
-            dataset_slug = 'nickpro/ouvidoria-setor-categoria'
-            print(f"[download] Baixando do Kaggle: {dataset_slug}")
-
-            api.dataset_download_files(
-                dataset_slug,
-                path=str(dataset_path),
-                unzip=True,
-                quiet=False
-            )
-
-            print("[download] ✓ Dataset baixado do Kaggle!")
-
-            csv_files = list(dataset_path.glob("*.csv"))
-            if csv_files:
-                return process_dataset(csv_files[0])
-
-        except Exception as e:
-            print(f"[download] Erro Kaggle: {e}")
-            print("[download] Tentando fonte alternativa...")
-
-    return download_from_huggingface()
-
-def download_from_huggingface():
-    print("[download] Baixando do HuggingFace...")
-
-    try:
-        from datasets import load_dataset
-
-        dataset_path = Path(__file__).parent.parent / "data" / "raw"
-        dataset_path.mkdir(parents=True, exist_ok=True)
-
-        print("[download] Carregando dataset 'nickpro/ouvidoria_setor_categoria'...")
-        ds = load_dataset("nickpro/ouvidoria_setor_categoria")
-
-        for split_name, split_data in ds.items():
-            csv_file = dataset_path / f"ouvidoria_{split_name}.csv"
-            split_data.to_csv(csv_file)
-            print(f"[download] Salvo: {csv_file}")
-
-        if 'train' in ds:
-            train_file = dataset_path / "ouvidoria.csv"
-            ds['train'].to_csv(train_file)
-            print(f"[download] Dataset principal salvo: {train_file}")
-            return process_dataset(train_file)
-
-        return str(dataset_path / "ouvidoria_train.csv")
-
-    except Exception as e:
-        print(f"[download] Erro HuggingFace: {e}")
-
-    return download_synthetic()
-
-def download_synthetic():
-    print("[download] Gerando dados sintéticos para teste...")
-
-    data = [
-        {"texto": "Tem um buraco enorme na Av. Principal, perto do posto de saúde municipal, já faz 3 dias", "categoria": "Infraestrutura"},
-        {"texto": "Calçada quebrada na frente da escola José de Alencar, risco para crianças", "categoria": "Infraestrutura"},
-        {"texto": "Falta de água no bairro Vila Nova há 3 dias, situação crítica", "categoria": "Infraestrutura"},
-        {"texto": "Rua com buracos enormes na região central, varios carros prejudicados", "categoria": "Infraestrutura"},
-        {"texto": "Ponte com rachaduras na estrada vicinal, muito perigoso", "categoria": "Infraestrutura"},
-        {"texto": "Bueiro entupido na rua das flores, alagamento constante", "categoria": "Infraestrutura"},
-        {"texto": "Falta dipirona e paracetamol no posto de saúde do bairro centro", "categoria": "Saúde"},
-        {"texto": "Médico Dr. João não apareceu na UBS Santa Maria hoje de manhã", "categoria": "Saúde"},
-        {"texto": "Farmácia do posto está sem medicamentos há semanas", "categoria": "Saúde"},
-        {"texto": "Enfermeira Maria não atende no posto do bairro progressista", "categoria": "Saúde"},
-        {"texto": "Hospital municipal sem insumos básicos para emergência", "categoria": "Saúde"},
-        {"texto": "Semáforo quebrado na esquina da rua 7 com a rua 15, perigoso", "categoria": "Trânsito"},
-        {"texto": "Ônibus 302 não passa há dois dias no meu bairro, sem informação", "categoria": "Trânsito"},
-        {"texto": "Ponto de ônibus quebrado na Av. Brasil, sem banco para esperar", "categoria": "Trânsito"},
-        {"texto": "Placa de trânsito arrancada na estrada do bairro industrial", "categoria": "Trânsito"},
-        {"texto": "Radar quebrado na avança principal há semanas", "categoria": "Trânsito"},
-        {"texto": "Poste apagado há três noites na rua das flores, escuridão total", "categoria": "Iluminação"},
-        {"texto": "Toda a praça central está sem luz, inseguro à noite", "categoria": "Iluminação"},
-        {"texto": "Lâmpada do poste em frente ao número 45 está queimada há dias", "categoria": "Iluminação"},
-        {"texto": "Iluminação pública quebrada na entrada do parque municipal", "categoria": "Iluminação"},
-        {"texto": "Quero elogiar o atendimento do servidor Pedro da ouvidoria", "categoria": "Outros"},
-        {"texto": "Preciso de informação sobre como tirar alvará de funcionamento", "categoria": "Outros"},
-        {"texto": "Denúncia sobre irregularidades na administração pública", "categoria": "Outros"},
-        {"texto": "Solicito documentação sobre obras na rua principal", "categoria": "Outros"},
-        {"texto": "Gostaria de saber sobre horário de funcionamento da prefeitura", "categoria": "Outros"},
+        ("Elogio ao atendimento do servidor Pedro da ouvidoria", 4, "Outros"),
+        ("Informação sobre alvará de funcionamento", 4, "Outros"),
+        ("Denúncia sobre irregularidades na administração", 4, "Outros"),
+        ("Solicito documentação sobre obras", 4, "Outros"),
+        ("Horário de funcionamento da prefeitura", 4, "Outros"),
+        ("Reclamação sobre atendimento no setor", 4, "Outros"),
+        ("Solicito informações sobre IPTU", 4, "Outros"),
+        ("Denúncia de descarte irregular de lixo", 4, "Outros"),
+        ("Reclamação sobre barulho de construção", 4, "Outros"),
+        ("Solicito poda de árvore na calçada", 4, "Outros"),
+        ("Pedido de informação sobre coleta de lixo", 4, "Outros"),
+        ("Denúncia de maus-tratos a animais", 4, "Outros"),
     ]
 
-    import pandas as pd
-    dataset_path = Path(__file__).parent.parent / "data" / "raw"
-    dataset_path.mkdir(parents=True, exist_ok=True)
-
-    df = pd.DataFrame(data)
-    csv_file = dataset_path / "ouvidoria.csv"
-    df.to_csv(csv_file, index=False)
-
-    print(f"[download] Dados sintéticos salvos: {csv_file}")
-    return process_dataset(csv_file)
-
-def process_dataset(csv_path):
-    import pandas as pd
-
-    print(f"[process] Processando {csv_path}...")
-
-    if not Path(csv_path).exists():
-        print(f"[process] Arquivo não encontrado: {csv_path}")
-        return None
-
-    try:
-        df = pd.read_csv(csv_path)
-    except Exception as e:
-        print(f"[process] Erro ao ler CSV: {e}")
-        return None
-
-    print(f"[process] Colunas: {df.columns.tolist()}")
-    print(f"[process] Total de linhas: {len(df)}")
-
-    text_col = None
-    for col in ['texto', 'text', 'description', 'content', 'reclamacao']:
-        if col in df.columns:
-            text_col = col
-            break
-
-    if not text_col:
-        print("[process] Nenhuma coluna de texto encontrada")
-        return None
-
-    cat_col = None
-    for col in ['categoria', 'category', 'label', 'setor']:
-        if col in df.columns:
-            cat_col = col
-            break
-
-    categories = ['Infraestrutura', 'Saúde', 'Trânsito', 'Iluminação', 'Outros']
-    category_map = {
-        'Infraestrutura': 'Infraestrutura',
-        'Saúde': 'Saúde',
-        'Trânsito': 'Trânsito',
-        'Iluminação': 'Iluminação',
-        'Outros': 'Outros',
-        'Crash': 'Infraestrutura', 'Bug': 'Infraestrutura', 'Technical': 'Infraestrutura', 'Hardware': 'Infraestrutura',
-        'Maintenance': 'Saúde', 'Security': 'Saúde', 'Breach': 'Saúde',
-        'Performance': 'Trânsito', 'Incident': 'Trânsito',
-        'Documentation': 'Iluminação', 'Feedback': 'Iluminação',
-        'Resolution': 'Outros', 'Feature': 'Outros', 'Sales': 'Outros', 'Product': 'Outros'
-    }
-
-    processed = []
-    for _, row in df.iterrows():
-        text = str(row[text_col])
-        categoria = str(row.get(cat_col, 'Outros')) if cat_col else 'Outros'
-
-        if categoria not in categories:
-            categoria = category_map.get(categoria, 'Outros')
-
-        if len(text) > 10:
-            processed.append({
+    data = []
+    for text, label, categoria in examples:
+        for _ in range(4):
+            data.append({
                 'text': text,
-                'label': categories.index(categoria),
+                'label': label,
                 'categoria': categoria
             })
 
-    output_path = csv_path.parent / "processed_ouvidoria.json"
-    with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(processed, f, ensure_ascii=False, indent=2)
+    return data
 
-    print(f"[process] ✓ Processado: {len(processed)} amostras")
-    print(f"[process] Salvo em: {output_path}")
+def process_dataset(data):
+    output_dir = Path(__file__).parent.parent / "data" / "raw"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = output_dir / "processed_ouvidoria.json"
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print(f"[dataset] Dataset salvo: {len(data)} amostras")
+    print(f"[dataset] Arquivo: {output_path}")
 
     category_counts = {}
-    for item in processed:
+    for item in data:
         cat = item['categoria']
         category_counts[cat] = category_counts.get(cat, 0) + 1
 
-    print("[process] Distribuição por categoria:")
+    print("[dataset] Distribuicao por categoria:")
     for cat, count in category_counts.items():
         print(f"  {cat}: {count}")
 
     return str(output_path)
 
+def download_dataset():
+    data_dir = Path(__file__).parent.parent / "data" / "raw"
+    processed_file = data_dir / "processed_ouvidoria.json"
+
+    if processed_file.exists():
+        with open(processed_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if len(data) >= 100:
+                print(f"[dataset] Dataset ja existe: {len(data)} amostras")
+                return str(processed_file)
+
+    print("[download] Gerando dados sintéticos...")
+    data = generate_synthetic_data()
+    return process_dataset(data)
+
 if __name__ == "__main__":
     result = download_dataset()
-    print(f"\n[done] Dataset disponível em: {result}")
+    print(f"\n[dataset] Pronto: {result}")

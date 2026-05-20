@@ -1,6 +1,6 @@
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
-from .config import MODEL_CONFIG
+from config import MODEL_CONFIG
 
 def load_model_and_tokenizer(model_path=None, from_hub=False, hub_model_id=None):
     if from_hub and hub_model_id:

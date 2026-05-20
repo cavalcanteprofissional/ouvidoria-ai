@@ -2,10 +2,12 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv('.env.local')
+load_dotenv('.env')
 
 COHERE_API_KEY = os.getenv('COHERE_API_KEY')
 KAGGLE_KEY = os.getenv('KAGGLE_KEY')
 KAGGLE_USERNAME = os.getenv('KAGGLE_USERNAME', 'cavalcanteprofissional')
+HF_TOKEN = os.getenv('HF_TOKEN')
 
 MODEL_CONFIG = {
     'name': 'neuralmind/bert-base-portuguese-cased',
@@ -15,11 +17,12 @@ MODEL_CONFIG = {
 
 TRAINING_CONFIG = {
     'learning_rate': 2e-5,
-    'epochs': 3,
-    'batch_size': 16,
-    'warmup_steps': 100,
+    'epochs': 1,
+    'batch_size': 4,
+    'warmup_steps': 10,
     'weight_decay': 0.01,
-    'k_folds': 2
+    'k_folds': 2,
+    'max_samples': 200
 }
 
 CATEGORIES = ['Infraestrutura', 'Saúde', 'Trânsito', 'Iluminação', 'Outros']

@@ -1,15 +1,19 @@
+import sys
 import os
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import json
 import torch
 import numpy as np
-from pathlib import Path
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, confusion_matrix
 from transformers import TrainingArguments, Trainer, EarlyStoppingCallback
 from torch.utils.data import Dataset
-from .model import load_model_and_tokenizer, get_device
-from .dataset import prepare_dataset, split_dataset
-from .config import MODEL_CONFIG, TRAINING_CONFIG, CATEGORIES
+
+from model import load_model_and_tokenizer, get_device
+from dataset import prepare_dataset
+from config import MODEL_CONFIG, TRAINING_CONFIG, CATEGORIES
 
 class ClassificationDataset(Dataset):
     def __init__(self, texts, labels, tokenizer, max_length=256):
@@ -128,8 +132,15 @@ def train_fold(fold_idx, train_data, val_data, output_dir, device):
     with open(output_dir / f"fold_{fold_idx}" / "confusion_matrix.json", 'w') as f:
         json.dump(cm_normalized.tolist(), f, indent=2)
 
+    trainer_state = {
+        'total_steps': trainer.state.total_steps,
+        'best_model_checkpoint': trainer.state.best_model_checkpoint,
+        'epoch': trainer.state.epoch,
+        'max_steps': trainer.state.max_steps
+    }
+
     with open(output_dir / f"fold_{fold_idx}" / "trainer_state.json", 'w') as f:
-        json.dump(trainer.state.state, f, indent=2)
+        json.dump(trainer_state, f, indent=2)
 
     return metrics, cm
 

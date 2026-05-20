@@ -1,7 +1,7 @@
-from .config import MODEL_CONFIG, TRAINING_CONFIG, CATEGORIES, HF_MODEL_ID
 import random
 import json
 from pathlib import Path
+from config import TRAINING_CONFIG, CATEGORIES
 
 def augment_data(data, target_size=None):
     if not data:
@@ -92,6 +92,12 @@ def prepare_dataset():
         with open(processed_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
             print(f"[dataset] Dataset carregado: {len(data)} amostras")
+
+            max_samples = TRAINING_CONFIG.get('max_samples', 200)
+            if len(data) > max_samples:
+                data = data[:max_samples]
+                print(f"[dataset] Limitado a {max_samples} amostras")
+
             return data
 
     from .download_dataset import download_dataset
@@ -99,7 +105,14 @@ def prepare_dataset():
 
     if result and Path(result).exists():
         with open(result, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+
+            max_samples = TRAINING_CONFIG.get('max_samples', 200)
+            if len(data) > max_samples:
+                data = data[:max_samples]
+                print(f"[dataset] Limitado a {max_samples} amostras")
+
+            return data
 
     return generate_synthetic_data()
 
@@ -113,35 +126,57 @@ def generate_synthetic_data():
         ("Rua com buracos enormes na região central", 0, "Infraestrutura"),
         ("Ponte com rachaduras na estrada vicinal", 0, "Infraestrutura"),
         ("Bueiro entupido na rua das flores causando alagamento", 0, "Infraestrutura"),
-        (" poste de luz quebrado na entrada do bairro", 0, "Infraestrutura"),
+        ("Poste de luz quebrado na entrada do bairro", 0, "Infraestrutura"),
+        ("Asfalto deteriorado na estrada do aeropuerto", 0, "Infraestrutura"),
+        ("Guia quebrada na calçada da rua commerciantes", 0, "Infraestrutura"),
+        ("Esgoto a céu aberto na vizinhança", 0, "Infraestrutura"),
 
         ("Falta dipirona no posto de saúde do bairro centro", 1, "Saúde"),
         ("Médico Dr. João não apareceu na UBS Santa Maria", 1, "Saúde"),
         ("Farmácia do posto sem medicamentos há semanas", 1, "Saúde"),
         ("Enfermeira Maria não atende no posto do bairro", 1, "Saúde"),
         ("Hospital sem insumos para emergência", 1, "Saúde"),
-        (" UBS sem médico hoje de manhã", 1, "Saúde"),
+        ("Ambulância quebrada no garage municipal", 1, "Saúde"),
+        ("Falta soro no hospital regional", 1, "Saúde"),
+        ("Médico ausentou-se do plantão noturno", 1, "Saúde"),
+        ("UBS sem atendimento médico hoje", 1, "Saúde"),
+        ("Posto de saúde com filas enormes", 1, "Saúde"),
 
         ("Semáforo quebrado na esquina da rua 7 com a 15", 2, "Trânsito"),
         ("Ônibus 302 não passa há dois dias no meu bairro", 2, "Trânsito"),
         ("Ponto de ônibus sem banco para esperar", 2, "Trânsito"),
         ("Placa de trânsito arrancada na estrada", 2, "Trânsito"),
-        ("Radar quebrado na avança principal", 2, "Trânsito"),
+        ("Semáforo piscando amarelo na av. brasil", 2, "Trânsito"),
+        ("Radar com defeito na via expressa", 2, "Trânsito"),
+        ("Lombada desgastada na rua escolar", 2, "Trânsito"),
+        ("Sinalização de obra abandonada na via", 2, "Trânsito"),
+        ("Faixa de pedestre apagada na frente da escola", 2, "Trânsito"),
+        ("Ponto de ônibus destruído por vândalos", 2, "Trânsito"),
 
         ("Poste apagado há três noites na rua das flores", 3, "Iluminação"),
         ("Toda a praça central está sem luz", 3, "Iluminação"),
         ("Lâmpada do poste queimada há dias", 3, "Iluminação"),
         ("Iluminação pública quebrada na entrada do parque", 3, "Iluminação"),
+        ("Refletor do campo de futebol queimado", 3, "Iluminação"),
+        ("Postes sem luz na entrada da escola", 3, "Iluminação"),
+        ("Réveillon sem iluminação na praça", 3, "Iluminação"),
+        ("Lâmpada da rua piscando constantemente", 3, "Iluminação"),
 
         ("Elogio ao atendimento do servidor Pedro da ouvidoria", 4, "Outros"),
         ("Informação sobre alvará de funcionamento", 4, "Outros"),
         ("Denúncia sobre irregularidades na administração", 4, "Outros"),
         ("Solicito documentação sobre obras", 4, "Outros"),
+        ("Horário de funcionamento da prefeitura", 4, "Outros"),
+        ("Reclamação sobre atendimento no setor", 4, "Outros"),
+        ("Solicito informações sobre IPTU", 4, "Outros"),
+        ("Denúncia de descarte irregular de lixo", 4, "Outros"),
+        ("Reclamação sobre barulho de construção", 4, "Outros"),
+        ("Solicito poda de árvore na calçada", 4, "Outros"),
     ]
 
     data = []
     for text, label, categoria in examples:
-        for _ in range(50):
+        for _ in range(5):
             data.append({
                 'text': text,
                 'label': label,
